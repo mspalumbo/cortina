@@ -835,13 +835,105 @@ created_at        timestamptz default now()
 Override takes precedence over standard rate card for that project.
 Rate lookup checks overrides first, falls back to rate_cards.
 
-**Rate card UI:**
+**Rate card UI (simple list — superseded by Rate Builder below for role-based rates):**
 - Active rates table: employee/role, current rate, effective date
 - Rate history per employee: all historical records with dates
 - Add rate form: always creates new record with effective_date — never edits existing
 - Role-based rates section separate from person-specific
 - internal_cost_rate column visible to Principal role only (RLS enforced)
 - Annual review workflow: duplicate previous year's rates, update amounts, set new effective_date
+
+---
+
+#### RATE BUILDER (M1) — Redesigned Spec (Session 9)
+
+The Rate Builder is a single-page module at `/rate-builder` (Management section, principal-only).
+It replaces the simple rate card list with a full burden calculation engine. All data lives
+on the existing `rate_cards` table with additional columns added via migration (see Section 16).
+
+**TWO-SECTION LAYOUT:**
+
+**Section 1 — Firm Assumptions** (full width, applies to all title stacks simultaneously):
+- Bonus % — bonus as % of base salary
+- Health & Welfare ($/yr) — medical, dental, vision, life, disability, HSA employer cost only. NOT firm insurance, NOT workers comp. Tooltip clarifies scope.
+- Retirement Match % — 401k employer match
+- Cell Phone ($/yr) — annual allowance per employee
+- Holiday Days — paid holidays per year
+- Payroll Taxes % — employer payroll taxes: FICA (7.65%) + FUTA/SUTA (~1-2%) + workers comp (~1-3%). Tooltip explains what to include. Replaces "Tax Rate %".
+- Support Staff % — admin/support staff cost as % of cost/hr
+- Profit Target % — target profit margin as % of cost/hr
+- Overhead Line-Item Builder — replaces the separate Operating $/hr and Insurance $/hr fields (see below)
+
+**Section 2 — Title Stacks** (tabbed, one at a time):
+Five default stacks: Project Coordinator, Assistant Project Manager, Project Manager,
+Senior Project Manager, Principal. Tabs are drag-to-reorder. Add/delete stacks. Sort order persisted.
+
+**PER TITLE STACK — Cost Build-Up Card** (LOW and HIGH columns):
+
+*Compensation:*
+- Salary Low / Salary High — direct input
+- Bonus — salary × bonus%
+- Payroll Taxes — salary × payroll_taxes%
+- Retirement Match — salary × retirement_match%
+- Health & Welfare — flat annual amount from firm assumptions
+- Cell Phone — flat annual amount from firm assumptions
+- Holidays — (salary / 2080) × holiday_days × 8
+- PTO Weeks — direct input per title
+- PTO Cost — (salary / 2080) × pto_weeks × 40
+- Utilization % — direct input per title
+- Utilization Cost — total_loaded_compensation × (1 − utilization_pct / 100)
+  WHERE total_loaded_compensation = salary + bonus + payroll_taxes + retirement_match + health_welfare + cell_phone + holidays + PTO cost
+  **CRITICAL:** Utilization cost is calculated on fully-loaded compensation, NOT base salary only.
+- Custom line items (jsonb) — label, amount, type ($ or % of salary), category (Compensation or Overhead)
+- Total Annual Cost — sum of all above
+
+*Overhead:*
+- Overhead $/hr — calculated output from Overhead Line-Item Builder (not a manual input)
+- Support Staff — cost_per_hour × support_staff%
+- Profit — cost_per_hour × profit_target%
+- Total Overhead/Hr — sum of all above
+
+*Rate Calculation:*
+- Total Annual Cost — from compensation
+- Billable Hours — always 2,080 (fixed)
+- Cost Per Hour — total_annual_cost / 2,080
+- + Total Overhead/Hr
+- Required Rate — cost_per_hour + total_overhead_per_hour
+- Required Rate Avg — average of low and high
+- Published Rate — editable field, color coded: green if ≥ required rate avg, red if below
+
+**OVERHEAD LINE-ITEM BUILDER:**
+A modal that opens when the user clicks the Overhead field. Replaces both Operating $/hr and
+Insurance $/hr fields. Full line-item builder, not a simple frequency calculator.
+
+Pre-populated categories:
+- Facilities & Operations: office rent/lease, utilities, office supplies, postage, parking
+- Insurance: GL insurance, professional liability/E&O, workers comp (firm-level policy, separate from payroll tax), cyber liability, D&O
+- Technology & Software: software licenses (per seat × headcount), cloud storage, IT support, phone system
+- People & Administrative: professional development, conferences/memberships, recruitment/onboarding, background checks
+- Other: accounting/bookkeeping, legal fees, bank fees, marketing overhead, custom items
+
+Each line item has: label (editable), annual amount ($), notes (optional), delete button, active/inactive toggle.
+
+Bottom of modal shows:
+- Total Annual Overhead — sum of all active line items
+- Projected Billable Hours — auto-calculated from all title stacks (sum of each stack × utilization% × 2,080)
+- Calculated Overhead $/hr — Total ÷ Projected Billable Hours
+- This $/hr writes back to the overhead field automatically on modal close
+- If any title stack utilization % changes after overhead was last calculated, show a stale indicator on the overhead field
+
+Storage: `overhead_line_items` jsonb on `firm_settings` table.
+
+**CALCULATION HELPER POPOVERS** (existing pattern — see Section 19 L15):
+Available on Health & Welfare and Cell Phone. User enters amount + frequency (per month/week/pay
+period/year/hour), system calculates annual total. Inputs persist via `calc_amount` and `calc_freq` fields.
+
+**SAVE BEHAVIOR:**
+- Auto-save on blur for all individual fields
+- Firm assumption changes update ALL Role-Based rate_cards records simultaneously (see Section 19 L14)
+- Calculated outputs stored: `cost_per_hour_low`, `cost_per_hour_high`, `required_rate_low`, `required_rate_high`, `required_rate_avg`
+
+---
 
 **users table extension (extends Supabase auth.users):**
 ```sql
@@ -1710,6 +1802,39 @@ All migrations have been run in Supabase. Do not re-run.
 
 **Next migration needed before Phase 2 build:**
 - staffing_allocations table (see Phase 2 spec Section 7.2)
+- Rate Builder columns on rate_cards + firm_settings (see Section 6.4 Rate Builder spec) — NOT YET RUN:
+
+```sql
+-- Rate Builder columns on rate_cards
+ALTER TABLE rate_cards
+ADD COLUMN IF NOT EXISTS salary_low decimal(12,2),
+ADD COLUMN IF NOT EXISTS salary_high decimal(12,2),
+ADD COLUMN IF NOT EXISTS pto_weeks decimal(5,2),
+ADD COLUMN IF NOT EXISTS target_utilization_pct decimal(5,2),
+ADD COLUMN IF NOT EXISTS bonus_pct decimal(5,2),
+ADD COLUMN IF NOT EXISTS payroll_taxes_pct decimal(5,2),
+ADD COLUMN IF NOT EXISTS retirement_match_pct decimal(5,2),
+ADD COLUMN IF NOT EXISTS health_welfare_annual decimal(12,2),
+ADD COLUMN IF NOT EXISTS cell_phone_allowance decimal(10,2),
+ADD COLUMN IF NOT EXISTS holiday_days integer,
+ADD COLUMN IF NOT EXISTS overhead_profit_pct decimal(5,2),
+ADD COLUMN IF NOT EXISTS overhead_support_pct decimal(5,2),
+ADD COLUMN IF NOT EXISTS sort_order integer,
+ADD COLUMN IF NOT EXISTS custom_items jsonb,
+ADD COLUMN IF NOT EXISTS health_welfare_calc_amount decimal(12,2),
+ADD COLUMN IF NOT EXISTS health_welfare_calc_freq text,
+ADD COLUMN IF NOT EXISTS cell_phone_calc_amount decimal(12,2),
+ADD COLUMN IF NOT EXISTS cell_phone_calc_freq text,
+ADD COLUMN IF NOT EXISTS cost_per_hour_low decimal(10,2),
+ADD COLUMN IF NOT EXISTS cost_per_hour_high decimal(10,2),
+ADD COLUMN IF NOT EXISTS required_rate_low decimal(10,2),
+ADD COLUMN IF NOT EXISTS required_rate_high decimal(10,2),
+ADD COLUMN IF NOT EXISTS required_rate_avg decimal(10,2);
+
+-- Overhead line items on firm_settings
+ALTER TABLE firm_settings
+ADD COLUMN IF NOT EXISTS overhead_line_items jsonb;
+```
 
 ---
 
@@ -1746,6 +1871,25 @@ All migrations have been run in Supabase. Do not re-run.
 
 ### Session 5c — Next
 **Objective:** Discounts module in Fee Development
+
+### Session 9 — Rate Builder spec redesign (spec only, no code)
+**Objective:** Redesign the Rate Builder (M1) spec in CLAUDE.md ahead of build.
+**What changed (Section 6.4 + Section 16 migration list):**
+- Utilization calculation corrected — utilization cost is now calculated on fully-loaded
+  compensation (salary + bonus + payroll taxes + retirement match + health & welfare +
+  cell phone + holidays + PTO cost), not on base salary only
+- Insurance/benefits/overhead structure clarified and simplified: Health & Welfare is
+  explicitly scoped to medical/dental/vision/life/disability/HSA employer cost only —
+  firm insurance and workers comp are excluded and now live in the overhead line-item
+  builder instead; Payroll Taxes % explicitly covers FICA + FUTA/SUTA + workers comp
+  (replaces the old flat "Tax Rate %")
+- Overhead Line-Item Builder added, replacing the flat Operating $/hr and Insurance $/hr
+  fields — a modal with pre-populated categories (Facilities & Operations, Insurance,
+  Technology & Software, People & Administrative, Other) that rolls up to a calculated
+  Overhead $/hr, stored as `overhead_line_items` jsonb on `firm_settings`
+- Added the pending migration (not yet run) for the new rate_cards columns and the
+  firm_settings.overhead_line_items column — see Section 16
+- No component files were touched this session — spec and migration doc only
 
 ### Session 7 — Timecards (E1)
 **What was built:**
@@ -1869,6 +2013,6 @@ This pattern works for small firms but may need normalization (separate firm_ass
 
 ---
 
-*Last updated: 2026-09-09*
-*Updated by: Claude Code — Timecards module (Session 7)*
-*Status: Session 7 complete — ready for Session 8*
+*Last updated: 2026-09-12*
+*Updated by: Claude Code — Rate Builder spec redesign (Session 9)*
+*Status: Session 9 spec update complete — Rate Builder migration pending before build*
