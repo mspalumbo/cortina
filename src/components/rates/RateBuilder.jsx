@@ -42,7 +42,7 @@ const DOLLAR_FIELDS = ['health_welfare_annual', 'cell_phone_allowance']
 // calc-helper popover inputs, so the popover can pre-fill on reopen.
 const CALC_FIELD_MAP = {
   health_welfare_annual: { amountCol: 'health_welfare_calc_amount', freqCol: 'health_welfare_calc_freq', defaultFreq: 'year' },
-  cell_phone_allowance: { amountCol: 'cell_phone_calc_amount', freqCol: 'cell_phone_calc_freq', defaultFreq: 'month' },
+  cell_phone_allowance: { amountCol: 'cell_phone_calc_amount', freqCol: 'cell_phone_calc_freq', defaultFreq: 'year' },
 }
 
 const FREQUENCIES = [
@@ -702,7 +702,10 @@ export default function RateBuilder() {
   // outputs under the new assumptions. Per CLAUDE.md L14 — firm-wide fields
   // update ALL rows simultaneously.
   async function applyAssumptionValue(field, value, extraFields = {}) {
-    const updatedAssumptions = { ...firmAssumptions, [field]: value }
+    // extraFields (the calc-helper's amount/freq columns) must be merged into
+    // local state too — otherwise they only ever land in Supabase, and
+    // reopening the popover later in the same session reads stale state.
+    const updatedAssumptions = { ...firmAssumptions, [field]: value, ...extraFields }
     setFirmAssumptions(updatedAssumptions)
 
     const { error: bulkErr } = await supabase
