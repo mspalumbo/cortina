@@ -922,13 +922,25 @@ export default function RateBuilder() {
           {/* Overhead $/hr — calculated output, opens the line-item builder */}
           <div>
             <label className="block text-xs text-[#6B7280] uppercase tracking-wide mb-1">Overhead ($/hr)</label>
-            <button
-              type="button"
-              onClick={() => setShowOverheadModal(true)}
-              className="w-full text-left text-sm border border-[#E5E7EB] rounded px-2 py-1 hover:border-[#F2903A] focus:outline-none focus:ring-1 focus:ring-[#F2903A] text-[#1A1A2E] bg-white"
-            >
-              {fmtRate(overheadPerHour)}
-            </button>
+            <div className="flex items-center gap-1">
+              <div className="flex-1 text-sm border border-[#E5E7EB] rounded px-2 py-1 text-[#1A1A2E] bg-white">
+                {fmtRate(overheadPerHour)}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowOverheadModal(true)}
+                className="shrink-0 w-6 h-6 flex items-center justify-center rounded border border-[#E5E7EB] text-[#6B7280] hover:text-[#F2903A] hover:border-[#F2903A] text-xs"
+                aria-label="Open overhead line-item builder"
+                title="Open overhead line-item builder"
+              >
+                <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="0.5" />
+                  <rect x="9" y="1.5" width="5.5" height="5.5" rx="0.5" />
+                  <rect x="1.5" y="9" width="5.5" height="5.5" rx="0.5" />
+                  <rect x="9" y="9" width="5.5" height="5.5" rx="0.5" />
+                </svg>
+              </button>
+            </div>
             {isOverheadStale && (
               <div className="mt-1 text-[10px] text-[#F59E0B] font-medium">Utilization changed — recalculate</div>
             )}
