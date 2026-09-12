@@ -463,13 +463,13 @@ function StackCard({ stack, firmAssumptions, overheadPerHour, canDelete, onField
         <label className="text-xs text-[#6B7280]">Headcount</label>
         <input
           type="number"
-          min="1"
+          min="0"
           step="1"
           defaultValue={stack.headcount ?? 1}
           onBlur={(e) => onFieldBlur(stack.rate_id, 'headcount', e.target.value)}
           className="w-16 text-xs text-right border border-[#E5E7EB] rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#F2903A]"
         />
-        <span className="text-xs text-[#6B7280]">people currently billing at this rate</span>
+        <span className="text-xs text-[#6B7280]">FTE currently billing at this rate</span>
       </div>
 
       <SectionHeader label="Compensation" />
@@ -677,7 +677,7 @@ export default function RateBuilder() {
       value = raw.trim()
     } else if (field === 'headcount') {
       const parsed = parseInt(raw, 10)
-      value = Number.isFinite(parsed) && parsed >= 1 ? parsed : 1
+      value = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
     } else {
       value = parseNum(raw)
     }
