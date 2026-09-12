@@ -12,14 +12,47 @@ const CATEGORY_DEFS = [
   { key: 'Other', defaults: ['Accounting & Bookkeeping', 'Legal Fees'] },
 ]
 
+// Frequency options for overhead line items — separate (smaller) set than the
+// firm-assumption calc popovers, per spec: Week / Month / Year only.
+const ITEM_FREQUENCIES = [
+  { key: 'week', label: 'Per Week', multiplier: 52 },
+  { key: 'month', label: 'Per Month', multiplier: 12 },
+  { key: 'year', label: 'Per Year', multiplier: 1 },
+]
+
+function annualize(inputAmount, freqKey) {
+  const freqObj = ITEM_FREQUENCIES.find((f) => f.key === freqKey) || ITEM_FREQUENCIES[1]
+  return (Number(inputAmount) || 0) * freqObj.multiplier
+}
+
 function buildDefaultItems() {
   const items = []
   for (const cat of CATEGORY_DEFS) {
     for (const label of cat.defaults) {
-      items.push({ id: crypto.randomUUID(), category: cat.key, label, amount: 0, notes: '', active: true })
+      items.push({
+        id: crypto.randomUUID(),
+        category: cat.key,
+        label,
+        notes: '',
+        active: true,
+        input_amount: 0,
+        input_freq: 'month',
+        annual_amount: 0,
+      })
     }
   }
   return items
+}
+
+// Backfills items saved before the frequency selector existed — an item with
+// annual_amount (or the old flat `amount` field) but no input_amount/input_freq
+// displays that figure in the amount field with Per Year selected.
+function normalizeItem(item) {
+  if (item.input_amount != null && item.input_freq) {
+    return { ...item, annual_amount: item.annual_amount ?? annualize(item.input_amount, item.input_freq) }
+  }
+  const annual = item.annual_amount ?? item.amount ?? 0
+  return { ...item, input_amount: annual, input_freq: 'year', annual_amount: annual }
 }
 
 function LineItemRow({ item, onChange, onDelete }) {
@@ -41,16 +74,25 @@ function LineItemRow({ item, onChange, onDelete }) {
           item.active ? 'text-[#1A1A2E]' : 'text-[#9CA3AF] line-through'
         }`}
       />
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="flex items-center gap-1 shrink-0 flex-wrap">
         <span className="text-xs text-[#6B7280]">$</span>
         <input
           type="number"
           step="any"
-          value={item.amount}
-          onChange={(e) => onChange({ amount: parseFloat(e.target.value) || 0 })}
-          className="w-24 text-sm text-right border border-[#E5E7EB] rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#F2903A]"
+          value={item.input_amount}
+          onChange={(e) => onChange({ input_amount: parseFloat(e.target.value) || 0 })}
+          className="w-20 text-sm text-right border border-[#E5E7EB] rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#F2903A]"
         />
-        <span className="text-xs text-[#6B7280] whitespace-nowrap">/yr</span>
+        <select
+          value={item.input_freq}
+          onChange={(e) => onChange({ input_freq: e.target.value })}
+          className="text-xs border border-[#E5E7EB] rounded px-1 py-1.5 text-[#1A1A2E] focus:outline-none focus:ring-1 focus:ring-[#F2903A]"
+        >
+          {ITEM_FREQUENCIES.map((f) => (
+            <option key={f.key} value={f.key}>{f.label}</option>
+          ))}
+        </select>
+        <span className="text-xs text-[#6B7280] whitespace-nowrap">= {fmt(item.annual_amount)}/yr</span>
       </div>
       <input
         type="text"
@@ -102,12 +144,23 @@ export default function OverheadBuilder({ stacks, onClose }) {
 
     setFirmSettingsId(data.id)
     const existing = data.overhead_line_items?.items
-    setItems(existing && existing.length > 0 ? existing : buildDefaultItems())
+    setItems(existing && existing.length > 0 ? existing.map(normalizeItem) : buildDefaultItems())
     setLoading(false)
   }
 
+  // Recomputes annual_amount whenever the amount or frequency changes, so the
+  // stored figure is always the calculated annual total.
   function updateItem(id, patch) {
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)))
+    setItems((prev) =>
+      prev.map((it) => {
+        if (it.id !== id) return it
+        const next = { ...it, ...patch }
+        if ('input_amount' in patch || 'input_freq' in patch) {
+          next.annual_amount = annualize(next.input_amount, next.input_freq)
+        }
+        return next
+      }),
+    )
   }
 
   function deleteItem(id) {
@@ -115,10 +168,13 @@ export default function OverheadBuilder({ stacks, onClose }) {
   }
 
   function addItem(category) {
-    setItems((prev) => [...prev, { id: crypto.randomUUID(), category, label: '', amount: 0, notes: '', active: true }])
+    setItems((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), category, label: '', notes: '', active: true, input_amount: 0, input_freq: 'month', annual_amount: 0 },
+    ])
   }
 
-  const totalAnnualOverhead = items.filter((it) => it.active).reduce((sum, it) => sum + (Number(it.amount) || 0), 0)
+  const totalAnnualOverhead = items.filter((it) => it.active).reduce((sum, it) => sum + (Number(it.annual_amount) || 0), 0)
   const billableHours = projectedBillableHours(stacks)
   const calculatedRate = billableHours > 0 ? totalAnnualOverhead / billableHours : 0
 

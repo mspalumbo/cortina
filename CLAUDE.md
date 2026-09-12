@@ -1836,6 +1836,16 @@ ALTER TABLE firm_settings
 ADD COLUMN IF NOT EXISTS overhead_line_items jsonb;
 ```
 
+- Rate Builder: headcount per title stack — NOT YET RUN. Needed so Projected Billable
+  Hours in the Overhead Line-Item Builder can account for more than 1 person billing at
+  a given title stack's rate (see Section 6.4 Rate Builder spec):
+
+```sql
+-- Rate Builder: headcount per title stack
+ALTER TABLE rate_cards
+ADD COLUMN IF NOT EXISTS headcount integer DEFAULT 1;
+```
+
 ---
 
 ## 17. BUILD LOG
@@ -1928,6 +1938,25 @@ ADD COLUMN IF NOT EXISTS overhead_line_items jsonb;
   (the old simple rate list at `/rates`) were left untouched, as directed
 - `src/components/rates/RateBuilderDetail.jsx` / `RateBuilderList.jsx` remain as unused
   stub files from the Session 6a refactor — not imported anywhere, left in place
+
+### Session 9c — Rate Builder polish: calculator icons, headcount, overhead item frequency
+**What changed (RateBuilder.jsx + OverheadBuilder.jsx only):**
+- Unified the Health & Welfare / Cell Phone calc-helper buttons and the Overhead field's
+  modal-open button onto one shared `CalculatorIcon` SVG, replacing the mismatched `#`
+  and grid-icon glyphs
+- Added a per-title-stack `headcount` field (integer, min 1, default 1) — auto-saves on
+  blur; `projectedBillableHours()` (shared util) now sums `headcount × target_utilization_pct/100
+  × 2080` across stacks instead of assuming 1 FTE per stack, so both the Overhead Builder's
+  footer and the stale-indicator comparison pick up headcount changes automatically
+- Overhead line items gained a frequency selector (Per Week / Per Month / Per Year)
+  alongside the amount input — item shape is now `{ id, label, category, notes, active,
+  input_amount, input_freq, annual_amount }` (dropped the old flat `amount` field);
+  `annual_amount` recalculates on every amount/frequency edit and is what all footer
+  totals and the calculated $/hr sum. Pre-populated default items default to Per Month.
+  A `normalizeItem()` backfill on load handles items saved before this change (or under
+  the old flat-`amount` shape), displaying the stored figure with Per Year selected
+- Documented (not run) a further pending migration — `rate_cards.headcount integer
+  DEFAULT 1` — in Section 16
 
 ### Session 7 — Timecards (E1)
 **What was built:**
@@ -2052,5 +2081,5 @@ This pattern works for small firms but may need normalization (separate firm_ass
 ---
 
 *Last updated: 2026-09-12*
-*Updated by: Claude Code — Rate Builder module build (Session 9b)*
-*Status: Session 9b complete — Rate Builder module built at /rate-builder, ready for Session 10*
+*Updated by: Claude Code — Rate Builder polish (Session 9c)*
+*Status: Session 9c complete — headcount migration still pending in Supabase before it takes effect*

@@ -27,13 +27,14 @@ export function parseCurrency(raw) {
   return Number.isFinite(p) ? p : 0
 }
 
-// Total projected billable hours across all title stacks — assumes 1 FTE per
-// stack, weighted by each stack's target utilization %. Used both to compute
-// the Overhead $/hr inside the Overhead Line-Item Builder and to detect when
-// that calculation has gone stale (utilization changed since it was last run).
+// Total projected billable hours across all title stacks — each stack
+// contributes headcount × target utilization % × annual hours. Used both to
+// compute the Overhead $/hr inside the Overhead Line-Item Builder and to
+// detect when that calculation has gone stale (utilization or headcount
+// changed since it was last run).
 export function projectedBillableHours(stacks) {
   return (stacks || []).reduce(
-    (sum, s) => sum + ((Number(s.target_utilization_pct) || 0) / 100) * ANNUAL_HOURS,
+    (sum, s) => sum + (Number(s.headcount) || 1) * ((Number(s.target_utilization_pct) || 0) / 100) * ANNUAL_HOURS,
     0,
   )
 }

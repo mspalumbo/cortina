@@ -189,6 +189,23 @@ function AverageRow({ label, value }) {
   )
 }
 
+// Calculator icon — used on every "open a calc helper" button (Health &
+// Welfare, Cell Phone, Overhead) so all three read as the same affordance.
+function CalculatorIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.3">
+      <rect x="2" y="1.5" width="12" height="13" rx="1.5" />
+      <rect x="4" y="3.5" width="8" height="2.5" rx="0.5" fill="currentColor" stroke="none" />
+      <circle cx="4.5" cy="9" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="8" cy="9" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="11.5" cy="9" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="4.5" cy="11.8" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="8" cy="11.8" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="11.5" cy="11.8" r="0.6" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
 // Hover/click info tooltip for firm assumption fields whose meaning needs
 // clarifying (Health & Welfare scope, Payroll Taxes composition).
 function InfoTooltip({ text }) {
@@ -442,6 +459,19 @@ function StackCard({ stack, firmAssumptions, overheadPerHour, canDelete, onField
         )}
       </div>
 
+      <div className="flex items-center gap-2 mb-3">
+        <label className="text-xs text-[#6B7280]">Headcount</label>
+        <input
+          type="number"
+          min="1"
+          step="1"
+          defaultValue={stack.headcount ?? 1}
+          onBlur={(e) => onFieldBlur(stack.rate_id, 'headcount', e.target.value)}
+          className="w-16 text-xs text-right border border-[#E5E7EB] rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-[#F2903A]"
+        />
+        <span className="text-xs text-[#6B7280]">people currently billing at this rate</span>
+      </div>
+
       <SectionHeader label="Compensation" />
       <TableHeader />
 
@@ -642,7 +672,15 @@ export default function RateBuilder() {
   // Title-specific field blur (salary_low, salary_high, pto_weeks,
   // target_utilization_pct, billable_rate, notes).
   async function handleStackFieldBlur(rateId, field, raw, isText = false) {
-    const value = isText ? raw.trim() : parseNum(raw)
+    let value
+    if (isText) {
+      value = raw.trim()
+    } else if (field === 'headcount') {
+      const parsed = parseInt(raw, 10)
+      value = Number.isFinite(parsed) && parsed >= 1 ? parsed : 1
+    } else {
+      value = parseNum(raw)
+    }
 
     let updatedStack = null
     setStacks((prev) =>
@@ -773,6 +811,7 @@ export default function RateBuilder() {
       is_active: true,
       target_utilization_pct: 85,
       custom_items: [],
+      headcount: 1,
       ...DEFAULT_ASSUMPTIONS,
     }
 
@@ -806,6 +845,7 @@ export default function RateBuilder() {
       pto_weeks: 3,
       target_utilization_pct: 85,
       custom_items: [],
+      headcount: 1,
       ...firmAssumptions,
     }
 
@@ -895,11 +935,11 @@ export default function RateBuilder() {
                     <button
                       type="button"
                       onClick={() => openPopover(f.key)}
-                      className="shrink-0 w-6 h-6 flex items-center justify-center rounded border border-[#E5E7EB] text-[#6B7280] hover:text-[#F2903A] hover:border-[#F2903A] text-xs"
+                      className="shrink-0 w-6 h-6 flex items-center justify-center rounded border border-[#E5E7EB] text-[#6B7280] hover:text-[#F2903A] hover:border-[#F2903A]"
                       aria-label="Calculate from amount + frequency"
                       title="Calculate from amount + frequency"
                     >
-                      #
+                      <CalculatorIcon />
                     </button>
                   )}
                 </div>
@@ -929,16 +969,11 @@ export default function RateBuilder() {
               <button
                 type="button"
                 onClick={() => setShowOverheadModal(true)}
-                className="shrink-0 w-6 h-6 flex items-center justify-center rounded border border-[#E5E7EB] text-[#6B7280] hover:text-[#F2903A] hover:border-[#F2903A] text-xs"
+                className="shrink-0 w-6 h-6 flex items-center justify-center rounded border border-[#E5E7EB] text-[#6B7280] hover:text-[#F2903A] hover:border-[#F2903A]"
                 aria-label="Open overhead line-item builder"
                 title="Open overhead line-item builder"
               >
-                <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="0.5" />
-                  <rect x="9" y="1.5" width="5.5" height="5.5" rx="0.5" />
-                  <rect x="1.5" y="9" width="5.5" height="5.5" rx="0.5" />
-                  <rect x="9" y="9" width="5.5" height="5.5" rx="0.5" />
-                </svg>
+                <CalculatorIcon />
               </button>
             </div>
             {isOverheadStale && (
