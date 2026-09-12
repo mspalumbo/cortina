@@ -27,16 +27,27 @@ export function parseCurrency(raw) {
   return Number.isFinite(p) ? p : 0
 }
 
+// A headcount of 0 is a deliberate "no one currently billing at this rate"
+// and resolves to 0; a missing/null headcount (rows from before the column
+// existed) falls back to 1.
+function resolveHeadcount(stack) {
+  return stack.headcount == null ? 1 : Number(stack.headcount) || 0
+}
+
 // Total projected billable hours across all title stacks — each stack
-// contributes headcount × target utilization % × annual hours. A headcount
-// of 0 is a deliberate "no one currently billing at this rate" and
-// contributes 0 hours; a missing/null headcount (rows from before the column
-// existed) falls back to 1. Used both to compute the Overhead $/hr inside the
-// Overhead Line-Item Builder and to detect when that calculation has gone
-// stale (utilization or headcount changed since it was last run).
+// contributes headcount × target utilization % × annual hours. Used both to
+// compute the Overhead $/hr inside the Overhead Line-Item Builder and to
+// detect when that calculation has gone stale (utilization or headcount
+// changed since it was last run).
 export function projectedBillableHours(stacks) {
-  return (stacks || []).reduce((sum, s) => {
-    const headcount = s.headcount == null ? 1 : Number(s.headcount) || 0
-    return sum + headcount * ((Number(s.target_utilization_pct) || 0) / 100) * ANNUAL_HOURS
-  }, 0)
+  return (stacks || []).reduce(
+    (sum, s) => sum + resolveHeadcount(s) * ((Number(s.target_utilization_pct) || 0) / 100) * ANNUAL_HOURS,
+    0,
+  )
+}
+
+// Total FTE count across all title stacks — the sum of headcount, used to
+// scale "per user" overhead line items (e.g. per-seat software licenses).
+export function totalFteCount(stacks) {
+  return (stacks || []).reduce((sum, s) => sum + resolveHeadcount(s), 0)
 }
