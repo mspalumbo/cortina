@@ -1891,6 +1891,44 @@ ADD COLUMN IF NOT EXISTS overhead_line_items jsonb;
   firm_settings.overhead_line_items column — see Section 16
 - No component files were touched this session — spec and migration doc only
 
+### Session 9b — Rate Builder (M1) build
+**Objective:** Build the redesigned Rate Builder module at /rate-builder per the Session 9 spec.
+**What was built:**
+- `src/utils/rateBuilder.js` — shared constants/helpers (`ANNUAL_HOURS`, `fmt`, `fmtRate`,
+  `parseNum`, `parseCurrency`, `projectedBillableHours`) used by both Rate Builder components
+- `src/components/rates/RateBuilder.jsx` — main module: Firm Assumptions card (bonus %,
+  health & welfare, retirement match, cell phone, holiday days, payroll taxes %, support
+  staff %, profit target %, plus the calculated Overhead $/hr field) and tabbed Title
+  Stacks with the full two-column (Low/High) cost build-up card, calc-helper popovers on
+  Health & Welfare and Cell Phone, and a Custom Items section (Compensation or Overhead,
+  $ or % of salary)
+- `src/components/rates/OverheadBuilder.jsx` — modal line-item builder, pre-populated
+  categories/items, computes Total Annual Overhead ÷ Projected Billable Hours
+- `src/pages/RateBuilderPage.jsx` — reduced to a thin `PageWrapper` + `RateBuilder` wrapper
+- App.jsx route (`/rate-builder`) and Sidebar "Rate Builder" nav item were already wired
+  correctly from a prior session — no changes needed
+
+**Key decisions:**
+- Utilization cost is calculated on fully-loaded compensation (salary + bonus + payroll
+  taxes + retirement match + health & welfare + cell phone + holidays + PTO cost), matching
+  the corrected spec — not on base salary alone
+- Overhead $/hr has no dedicated rate_cards/firm_settings column in the approved migration,
+  so the calculated rate is cached inside the `overhead_line_items` jsonb blob itself
+  (`{ items, calculated_rate, calculated_hours, calculated_total }`) rather than requiring
+  a further migration. A stale indicator compares `calculated_hours` against the live
+  sum of `target_utilization_pct/100 × 2080` across all stacks and flags when they diverge
+- Overhead Line-Item Builder pre-populates its default categories/items only in local
+  state on open (per spec) — nothing is written to `firm_settings` until Close & Save
+- This entirely replaces the Session 6a Rate Builder implementation (old field names:
+  `benefits_annual`, `overhead_operating`, `overhead_insurance`, `overhead_taxes_pct`,
+  etc. — all dropped in the Session 9 migration). Drag-to-reorder title-stack tabs from
+  Session 6a was intentionally NOT carried forward this session — tabs are static order
+  for now, reorder to be re-added in a future session
+- `src/pages/RateCardsPage.jsx` + `src/components/rates/RateCardList.jsx`/`RateCardForm.jsx`
+  (the old simple rate list at `/rates`) were left untouched, as directed
+- `src/components/rates/RateBuilderDetail.jsx` / `RateBuilderList.jsx` remain as unused
+  stub files from the Session 6a refactor — not imported anywhere, left in place
+
 ### Session 7 — Timecards (E1)
 **What was built:**
 - TimesheetsPage.jsx — week selector (Sun-Sat), prev/next navigation, Copy/Save/Submit buttons, Grid/List toggle, defaults to current week on load
@@ -2014,5 +2052,5 @@ This pattern works for small firms but may need normalization (separate firm_ass
 ---
 
 *Last updated: 2026-09-12*
-*Updated by: Claude Code — Rate Builder spec redesign (Session 9)*
-*Status: Session 9 spec update complete — Rate Builder migration pending before build*
+*Updated by: Claude Code — Rate Builder module build (Session 9b)*
+*Status: Session 9b complete — Rate Builder module built at /rate-builder, ready for Session 10*
