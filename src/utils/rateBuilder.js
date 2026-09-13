@@ -2,11 +2,17 @@
 // Keeping these in one place avoids the two components drifting out of sync — see
 // CLAUDE.md Lessons Learned L3.
 
+import { formatCurrency, parseCurrency } from './currency'
+
 export const ANNUAL_HOURS = 2080
 
+// "$"-prefixed display for read-only calculated dollar values (Row2,
+// SubtotalRow2, TotalRow2, AverageRow, etc.). Wraps the canonical
+// formatCurrency() in utils/currency.js — use formatCurrency() directly
+// instead when a "$" is already rendered separately, to avoid a double sign.
 export function fmt(n) {
   if (n === null || n === undefined || isNaN(n)) return '—'
-  return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return '$' + formatCurrency(n)
 }
 
 export function fmtRate(n) {
@@ -19,13 +25,7 @@ export function parseNum(raw) {
   return raw === '' || raw === null || raw === undefined || !Number.isFinite(p) ? 0 : p
 }
 
-// Strips "$" and "," from a typed currency string.
-export function parseCurrency(raw) {
-  if (raw == null) return 0
-  const cleaned = String(raw).replace(/[$,]/g, '').trim()
-  const p = parseFloat(cleaned)
-  return Number.isFinite(p) ? p : 0
-}
+export { formatCurrency, parseCurrency }
 
 // A headcount of 0 is a deliberate "no one currently billing at this rate"
 // and resolves to 0; a missing/null headcount (rows from before the column

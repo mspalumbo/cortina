@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import OverheadBuilder from './OverheadBuilder'
-import { ANNUAL_HOURS, fmt, fmtRate, parseCurrency, parseNum, projectedBillableHours } from '../../utils/rateBuilder'
+import { ANNUAL_HOURS, fmt, fmtRate, parseNum, projectedBillableHours } from '../../utils/rateBuilder'
+import { formatCurrency, parseCurrency } from '../../utils/currency'
 
 const DEFAULT_ASSUMPTIONS = {
   bonus_pct: 5,
@@ -327,6 +328,9 @@ function CalcPopover({ amount, freq, onAmountChange, onFreqChange, onApply, onCl
   )
 }
 
+// Value is rendered without a "$" prefix — the caller already renders a
+// separate "$" label next to this input (see the Firm Assumptions grid), so
+// prefixing here as well would show a duplicate sign.
 function DollarAssumptionInput({ value, focused, onFocusField, onCommit }) {
   const [raw, setRaw] = useState(String(value ?? 0))
 
@@ -334,7 +338,7 @@ function DollarAssumptionInput({ value, focused, onFocusField, onCommit }) {
     <input
       type={focused ? 'number' : 'text'}
       step="any"
-      value={focused ? raw : fmt(value)}
+      value={focused ? raw : formatCurrency(value)}
       onFocus={() => {
         setRaw(String(value ?? 0))
         onFocusField()

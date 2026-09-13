@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { fmt, fmtRate, projectedBillableHours, totalFteCount } from '../../utils/rateBuilder'
+import { formatCurrency, parseCurrency } from '../../utils/currency'
 
 // Pre-populated categories + default line items — used only when
 // firm_settings.overhead_line_items has no items yet. costType/freq default
@@ -88,6 +89,32 @@ function normalizeItem(item, fteCount) {
   return { ...item, cost_type, input_amount: annual, input_freq: 'year', annual_amount: annual }
 }
 
+// Line-item amount input: formatted currency at rest, plain number while
+// focused so the user can type normally; saves the raw value on blur — same
+// pattern as SalaryFieldInput in RateBuilder.jsx.
+function AmountInput({ value, onCommit }) {
+  const [editing, setEditing] = useState(false)
+  const [raw, setRaw] = useState(String(value ?? 0))
+
+  return (
+    <input
+      type={editing ? 'number' : 'text'}
+      step="any"
+      value={editing ? raw : formatCurrency(value)}
+      onFocus={() => {
+        setRaw(String(value ?? 0))
+        setEditing(true)
+      }}
+      onChange={(e) => setRaw(e.target.value)}
+      onBlur={(e) => {
+        setEditing(false)
+        onCommit(e.target.value)
+      }}
+      className="w-20 text-sm text-right border border-[#E5E7EB] rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#F2903A]"
+    />
+  )
+}
+
 function LineItemRow({ item, fteCount, onChange, onDelete }) {
   const isPerUser = item.cost_type === 'per_user'
 
@@ -138,12 +165,9 @@ function LineItemRow({ item, fteCount, onChange, onDelete }) {
 
       <div className="flex flex-wrap items-center gap-1 pl-6">
         <span className="text-xs text-[#6B7280]">$</span>
-        <input
-          type="number"
-          step="any"
+        <AmountInput
           value={item.input_amount}
-          onChange={(e) => onChange({ input_amount: parseFloat(e.target.value) || 0 })}
-          className="w-20 text-sm text-right border border-[#E5E7EB] rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#F2903A]"
+          onCommit={(raw) => onChange({ input_amount: parseCurrency(raw) })}
         />
         <select
           value={item.input_freq}
